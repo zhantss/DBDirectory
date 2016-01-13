@@ -11,6 +11,9 @@
 # test lib
 .lib/
 
+# test bin
+.bin/
+
 # maven target
 .target/
 
