@@ -1,0 +1,292 @@
+package pro.zhantss.lucene.store.database.handler;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collection;
+
+import pro.zhantss.lucene.data.handler.DataHandler;
+import pro.zhantss.lucene.store.database.DatabaseDirectory;
+import pro.zhantss.lucene.store.database.DatabaseDirectoryException;
+import pro.zhantss.lucene.store.database.datasource.DataSourceUtils;
+
+public class DatabaseDirectoryHandler {
+
+    public static final DatabaseDirectoryHandler INSTANCE = new DatabaseDirectoryHandler();
+
+    private DatabaseDirectoryHandler() {
+    }
+
+    /**
+     * @param directory
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public boolean existsIndexTable(final DatabaseDirectory directory) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlTableExists = directory.getConfig().sqlTableExists(directory.getIndexTableName());
+        boolean exists = false;
+        try {
+            exists = (Boolean) JdbcTemplate.executeSelect(connection, sqlTableExists,
+                    new JdbcTemplate.ExecuteSelectCallback() {
+
+                        @Override
+                        public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                            // do nothing
+                        }
+
+                        @Override
+                        public Object execute(final ResultSet rs) throws Exception {
+                            return rs.next() ? Boolean.TRUE : Boolean.FALSE;
+                        }
+                    });
+        } catch (final DatabaseDirectoryException e) {
+        }
+        return exists;
+    }
+
+    /**
+     * @param directory
+     * @throws DatabaseDirectoryException
+     */
+    public void createIndexTable(final DatabaseDirectory directory) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlCreate = directory.getConfig().sqlTableCreate(directory.getIndexTableName());
+        JdbcTemplate.executeUpdate(connection, sqlCreate, new JdbcTemplate.PrepateStatementAwareCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                // do nothing
+            }
+        });
+    }
+
+    /**
+     * @param directory
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public String[] listAllFiles(final DatabaseDirectory directory) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlListAll = directory.getConfig().sqlSelectAll(directory.getIndexTableName());
+        return (String[]) JdbcTemplate.executeSelect(connection, sqlListAll, new JdbcTemplate.ExecuteSelectCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+            }
+
+            @Override
+            public Object execute(final ResultSet rs) throws Exception {
+                final ArrayList<String> names = new ArrayList<String>();
+                while (rs.next()) {
+                    names.add(rs.getString(1));
+                }
+                return names.toArray(new String[names.size()]);
+            }
+        });
+    }
+
+    /**
+     * @param directory
+     * @param names
+     */
+    public void syncFiles(final DatabaseDirectory directory, final Collection<String> names) {
+        // TODO Does nothing, will use transaction to commit the data
+    	// 事务commit
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public long fileLength(final DatabaseDirectory directory, final String name) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlSelectSize = directory.getConfig().sqlSelectSize(directory.getIndexTableName());
+        return (Long) JdbcTemplate.executeSelect(connection, sqlSelectSize, new JdbcTemplate.ExecuteSelectCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                ps.setString(1, name);
+            }
+
+            @Override
+            public Object execute(final ResultSet rs) throws Exception {
+                return rs.next() ? rs.getLong(1) : 0l;
+            }
+        });
+    }
+
+    /**
+     * @param directory
+     * @param source
+     * @param dest
+     * @throws DatabaseDirectoryException
+     */
+    public void renameFile(final DatabaseDirectory directory, final String source, final String dest)
+            throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlUpdate = directory.getConfig().sqlUpdate(directory.getIndexTableName());
+        JdbcTemplate.executeUpdate(connection, sqlUpdate, new JdbcTemplate.PrepateStatementAwareCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                ps.setFetchSize(1);
+                ps.setString(1, dest);
+                ps.setString(2, source);
+            }
+        });
+
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public byte[] fileContent(final DatabaseDirectory directory, final String name) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlSelectContent = directory.getConfig().sqlSelectContent(directory.getIndexTableName());
+        return (byte[]) JdbcTemplate.executeSelect(connection, sqlSelectContent,
+                new JdbcTemplate.ExecuteSelectCallback() {
+
+                    @Override
+                    public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                        ps.setString(1, name);
+                    }
+
+                    @Override
+                    public Object execute(final ResultSet rs) throws Exception {
+                        return rs.next() ? rs.getBytes(1) : null;
+                    }
+                });
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public InputStream fileStream(final DatabaseDirectory directory, final String name)
+            throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlSelectContent = directory.getConfig().sqlSelectContent(directory.getIndexTableName());
+        byte[] buffer;
+		try {
+			buffer = DataHandler.streamToByteListAndClose((InputStream) JdbcTemplate.executeSelect(connection, sqlSelectContent,
+			        new JdbcTemplate.ExecuteSelectCallback() {
+
+			    @Override
+			    public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+			        ps.setString(1, name);
+			    }
+
+			    @Override
+			    public Object execute(final ResultSet rs) throws Exception {
+			        return rs.next() ? rs.getBinaryStream(1) : null;
+			    }
+			}));
+			InputStream stream = new ByteArrayInputStream(buffer);
+	        stream.mark(0);
+	        return stream;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+        return (InputStream) JdbcTemplate.executeSelect(connection, sqlSelectContent,
+                new JdbcTemplate.ExecuteSelectCallback() {
+
+                    @Override
+                    public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                        ps.setString(1, name);
+                    }
+
+                    @Override
+                    public Object execute(final ResultSet rs) throws Exception {
+                        return rs.next() ? rs.getBinaryStream(1) : null;
+                    }
+                });
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @param content
+     * @param length
+     * @throws DatabaseDirectoryException
+     */
+    public void saveFile(final DatabaseDirectory directory, final String name, final Object content, final long length)
+            throws DatabaseDirectoryException {
+        final String sqlInsert = directory.getConfig().sqlInsert(directory.getIndexTableName());
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        JdbcTemplate.executeUpdate(connection, sqlInsert, new JdbcTemplate.PrepateStatementAwareCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                ps.setFetchSize(1);
+                ps.setString(1, name);
+                if (length == 0) {
+                    ps.setNull(2, Types.BLOB);
+                } else if (content instanceof InputStream) {
+                    //ps.setBinaryStream(2, (InputStream) content, length);
+                	byte[] buffer = DataHandler.streamToByteListAndClose((InputStream)content);
+                	ps.setBytes(2, buffer);
+                } else {
+                    //ps.setBinaryStream(2, new ByteArrayInputStream((byte[]) content), length);
+                	ps.setBytes(2, (byte[]) content);
+                }
+                ps.setLong(3, length);
+            }
+        });
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @param commit
+     * @throws DatabaseDirectoryException
+     */
+    public void deleteFile(final DatabaseDirectory directory, final String name) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlDelete = directory.getConfig().sqlDelete(directory.getIndexTableName());
+        JdbcTemplate.executeUpdate(connection, sqlDelete, new JdbcTemplate.PrepateStatementAwareCallback() {
+
+            @Override
+            public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                ps.setFetchSize(1);
+                ps.setString(1, name);
+            }
+        });
+    }
+
+    /**
+     * @param directory
+     * @param name
+     * @return
+     * @throws DatabaseDirectoryException
+     */
+    public boolean existsFile(final DatabaseDirectory directory, final String name) throws DatabaseDirectoryException {
+        final Connection connection = DataSourceUtils.getConnection(directory.getDataSource());
+        final String sqlSelectName = directory.getConfig().sqlSelectName(directory.getIndexTableName());
+        return (Boolean) JdbcTemplate.executeSelect(connection, sqlSelectName,
+                new JdbcTemplate.ExecuteSelectCallback() {
+
+                    @Override
+                    public void fillPrepareStatement(final PreparedStatement ps) throws Exception {
+                        ps.setString(1, name);
+                    }
+
+                    @Override
+                    public Object execute(final ResultSet rs) throws Exception {
+                        return rs.next() ? Boolean.TRUE : Boolean.FALSE;
+                    }
+                });
+    }
+}
