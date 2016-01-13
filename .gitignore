@@ -14,6 +14,8 @@
 # test bin
 /bin/
 
+# test info
+src/main/resources/info/
 
 # maven target
 /target/
@@ -23,3 +25,4 @@
 *.jar
 *.war
 *.ear
+src/test/java/pro/zhantss/lucene/test/Test.java
