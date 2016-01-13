@@ -3,6 +3,17 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
+# Eclpse Setting
+.settings/
+.project
+.classpath
+
+# test lib
+.lib/
+
+# maven target
+.target/
+
 # Package Files #
 *.jar
 *.war
