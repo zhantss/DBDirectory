@@ -13,6 +13,16 @@
   If you really need this way, you can try  
   Pass test of Lucene 4.7.2/4.7.1  
     
+  How to USE?  
+  Open the pom.xml, delete these code, these is only use to test code
+    
+ ```
+    <dependency>
+      <groupId>com.chenlb.mmseg4j.analysis</groupId>
+      <artifactId>analysis-repair</artifactId>
+      <version>1.0.2</version>
+    </dependency>
+ ```
       
       
   Lucene 4.7 的数据库Directory实现,效率不高,没办法的实现, 给实在有需求的人用  
