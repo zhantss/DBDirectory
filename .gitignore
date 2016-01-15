@@ -25,4 +25,6 @@ src/main/resources/info/
 *.jar
 *.war
 *.ear
+
+# junit test file
 src/test/java/pro/zhantss/lucene/test/Test.java
